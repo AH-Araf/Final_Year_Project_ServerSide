@@ -45,12 +45,13 @@ async function run() {
         await client.connect();
         const usersCollection = client.db("baiustDB").collection("users");
 
-        //JWT Secure
+        //JWT Secure 
         app.post('/jwt', (req, res) => {
             const user = req.body;
             const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '5h' })
             res.send({ token })
         })
+
         //Admin Secure
         const verifyAdmin = async (req, res, next) => {
             const email = req.decoded.email;
@@ -62,12 +63,48 @@ async function run() {
             next();
         }
 
-
-
-        app.get('/users', verifyJWT, verifyAdmin, async (req, res) => {
+        // verifyJWT, verifyAdmin,
+        app.get('/users',  async (req, res) => {
             const result = await usersCollection.find().toArray();
             res.send(result);
         });
+
+        app.post('/users', async (req, res) => {
+            const user = req.body;
+            const query = { email: user.email }
+            const existingUser = await usersCollection.findOne(query);
+
+            if (existingUser) {
+                return res.send({ message: 'user already exists' })
+            }
+
+            const result = await usersCollection.insertOne(user);
+            res.send(result);
+        });
+
+        app.get('/users/admin/:email', verifyJWT, async (req, res) => {
+            const email = req.params.email;
+
+            if (req.decoded.email !== email) {
+                res.send({ admin: false })
+            }
+            const query = { email: email }
+            const user = await usersCollection.findOne(query);
+            const result = { admin: user?.role === 'admin' }
+            res.send(result);
+        })
+
+        app.patch('/users/admin/:id', async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) };
+            const updateDoc = {
+                $set: {
+                    role: 'admin'
+                },
+            };
+            const result = await usersCollection.updateOne(filter, updateDoc);
+            res.send(result);
+        })
 
 
 
